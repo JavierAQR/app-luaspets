@@ -63,7 +63,7 @@ export default function AuthScreen() {
 
   useEffect(() => {
     setError("");
-  }, [activeTab])
+  }, [activeTab]);
 
   return (
     <ImageBackground
@@ -179,7 +179,9 @@ export default function AuthScreen() {
             </Button>
 
             {activeTab === "login" && (
-              <TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => router.push("/recover-password" as any)}
+              >
                 <Text style={styles.forgotPassword}>
                   ¿Olvidó su contraseña?
                 </Text>
