@@ -34,16 +34,13 @@ export default function WelcomeScreen() {
         <View style={styles.bottomSection}>
           <TouchableOpacity
             style={styles.button}
-            onPress={() => router.push("/(auth)/login")}
+            onPress={() =>
+              router.push({
+                pathname: "/(auth)" as const
+              })
+            }
           >
-            <Text style={styles.buttonText}>Iniciar sesión</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity onPress={() => router.push("/(auth)/register")}>
-            <Text style={styles.registerText}>
-              ¿No tienes una cuenta?{" "}
-              <Text style={styles.registerLink}>Regístrate</Text>
-            </Text>
+            <Text style={styles.buttonText}>Ingresar</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -76,18 +73,18 @@ const styles = StyleSheet.create({
   bottomSection: {
     width: "100%",
     alignItems: "center",
-    marginBottom: 20
+    marginBottom: 20,
   },
   button: {
     backgroundColor: "#BC55D5",
-    paddingVertical: 15,
-    paddingHorizontal: 90,
+    paddingVertical: 16,
+    paddingHorizontal: 120,
     borderRadius: 30,
     marginBottom: 20,
   },
   buttonText: {
     color: "white",
-    fontSize: 16,
+    fontSize: 20,
     fontWeight: "bold",
   },
   registerText: {
