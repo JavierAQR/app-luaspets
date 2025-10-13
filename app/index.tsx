@@ -11,7 +11,6 @@ export default function Index() {
     const checkAuth = async () => {
       try {
         const token = await useAuth.getToken(); // 👈 lee token del SecureStore o AsyncStorage
-        console.log(token);
         
         if (token) {
           router.replace("/(tabs)");

@@ -8,7 +8,8 @@ import {
     TouchableOpacity,
     View,
 } from 'react-native';
-import { styles } from './styles';
+import styles from './styles';
+
 
 // Datos temporales de productos
 const PRODUCTOS_DATA = {

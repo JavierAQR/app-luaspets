@@ -1,38 +1,7 @@
+import CustomHeader from "@/components/CustomHeader";
 import { MaterialIcons } from "@expo/vector-icons";
-import { Tabs, useRouter } from "expo-router";
-import { Image, StyleSheet, TouchableOpacity, View } from "react-native";
+import { Tabs } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-
-function CustomHeader() {
-  const router = useRouter();
-  const insets = useSafeAreaInsets();
-
-  return (
-    <View style={[styles.headerContainer, { paddingTop: insets.top }]}>
-    <View style={styles.header}>
-    <TouchableOpacity
-      style={styles.headerButton}
-      onPress={() => router.push('/(tabs)')}
-    >
-      <MaterialIcons name="person" size={28} color="#333" />
-    </TouchableOpacity>
-
-    <Image
-      source={require('../../assets/logo.png')}
-      style={styles.logo}
-      resizeMode="contain"
-    />
-
-    <TouchableOpacity
-      style={styles.headerButton}
-      onPress={() => router.push('/(tabs)')}
-    >
-      <MaterialIcons name="shopping-cart" size={28} color="#333" />
-    </TouchableOpacity>
-    </View>
-  </View>
-  );
-}
 
 
 export default function TabsLayout() {
@@ -110,30 +79,3 @@ export default function TabsLayout() {
     </Tabs>
   );
 }
-
-
-const styles = StyleSheet.create({
-  headerContainer: {
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 15,
-    backgroundColor: '#fff',
-  },
-  headerButton: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  logo: {
-    width: 120,
-    height: 60,
-  },
-});

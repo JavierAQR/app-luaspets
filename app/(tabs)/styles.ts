@@ -3,7 +3,7 @@ import { Dimensions, StyleSheet } from "react-native";
 const { width } = Dimensions.get('window');
 const CARD_WIDTH = (width - 60) / 2;
 
-export const styles = StyleSheet.create({
+const styles = StyleSheet.create({
     container: {
       flex: 1,
       backgroundColor: '#f5f5f5',
@@ -181,3 +181,5 @@ export const styles = StyleSheet.create({
       fontWeight: '700',
     },
   });
+
+  export default styles;
