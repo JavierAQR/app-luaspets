@@ -1,5 +1,4 @@
 import { MaterialIcons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
     FlatList,
@@ -71,7 +70,7 @@ type Mascota = {
 };
 
 export default function MascotasScreen() {
-  const router = useRouter();
+//   const router = useRouter();
   const [mascotas] = useState<Mascota[]>(MASCOTAS_DATA);
 
   const renderMascotaCard = ({ item }: { item: Mascota }) => {
