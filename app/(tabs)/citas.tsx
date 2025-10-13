@@ -1,11 +1,11 @@
 import { StyleSheet, Text, View } from 'react-native';
 
-export default function ServiciosScreen() {
+export default function CitasScreen() {
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Servicios</Text>
+      <Text style={styles.title}>Mis Citas</Text>
       <Text style={styles.subtitle}>
-        Aquí verás todos los servicios veterinarios disponibles
+        Agenda y administra tus citas veterinarias
       </Text>
     </View>
   );
@@ -14,20 +14,20 @@ export default function ServiciosScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#f8f8f8',
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#f8f8f8",
     padding: 20,
   },
   title: {
     fontSize: 28,
-    fontWeight: '700',
-    color: '#333',
+    fontWeight: "700",
+    color: "#333",
     marginBottom: 10,
   },
   subtitle: {
     fontSize: 16,
-    color: '#666',
-    textAlign: 'center',
+    color: "#666",
+    textAlign: "center",
   },
 });
