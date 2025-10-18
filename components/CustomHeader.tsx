@@ -39,7 +39,7 @@ export default function CustomHeader({
     if (onCartPress) {
       onCartPress();
     } else {
-      router.push('/(tabs)');
+      router.push('/cart');
     }
   };
 

@@ -1,7 +1,7 @@
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, View } from "react-native";
-import { useAuth } from "../hooks/useAuth"; // 👈 ajusta la ruta si está en otro lugar
+import { useAuth } from "../hooks/useAuth";
 
 export default function Index() {
   const [loading, setLoading] = useState(true);
@@ -10,7 +10,7 @@ export default function Index() {
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        const token = await useAuth.getToken(); // 👈 lee token del SecureStore o AsyncStorage
+        const token = await useAuth.getToken();
         
         if (token) {
           router.replace("/(tabs)");
