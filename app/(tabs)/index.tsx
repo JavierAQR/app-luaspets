@@ -1,4 +1,6 @@
+import { API } from '@/constants/api';
 import { MaterialIcons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
@@ -11,7 +13,6 @@ import {
   View,
 } from 'react-native';
 import styles from '../styles/styles';
-import { API } from '@/constants/api';
 
 // Datos temporales de servicios
 type CategoryType = "grooming" | "consultas" | "vacunas";
@@ -40,10 +41,16 @@ const SERVICE_TYPE_TO_CATEGORY: Record<ServiceType, CategoryType> = {
 };
 
 export default function ServiciosScreen() {
+  const router = useRouter();
+
   const [searchQuery, setSearchQuery] = useState("");
   const [activeCategory, setActiveCategory] =
     useState<CategoryType>("grooming");
-  const [selectedServices, setSelectedServices] = useState<string[]>([]);
+
+  // 👇 ahora solo 1 servicio seleccionado
+  const [selectedServiceId, setSelectedServiceId] = useState<string | null>(
+    null
+  );
 
   const [services, setServices] = useState<Service[]>([]);
   const [loading, setLoading] = useState(true);
@@ -69,11 +76,7 @@ export default function ServiciosScreen() {
   }, []);
 
   const toggleServiceSelection = (serviceId: string) => {
-    setSelectedServices((prev) =>
-      prev.includes(serviceId)
-        ? prev.filter((id) => id !== serviceId)
-        : [...prev, serviceId]
-    );
+    setSelectedServiceId((prev) => (prev === serviceId ? null : serviceId));
   };
 
   // Filtrar primero por categoría, luego por búsqueda
@@ -92,6 +95,15 @@ export default function ServiciosScreen() {
       ),
     [filteredServicesByCategory, searchQuery]
   );
+
+  const handleReserve = () => {
+    if (!selectedServiceId) return;
+
+    router.push({
+      pathname: "/(tabs)/citas/nueva",
+      params: { serviceId: selectedServiceId },
+    } as any);
+  };
 
   if (loading) {
     return (
@@ -132,7 +144,10 @@ export default function ServiciosScreen() {
               styles.categoryTab,
               activeCategory === category.key && styles.activeCategoryTab,
             ]}
-            onPress={() => setActiveCategory(category.key)}
+            onPress={() => {
+              setActiveCategory(category.key);
+              setSelectedServiceId(null); // limpia selección al cambiar categoría
+            }}
           >
             <Text
               style={[
@@ -158,7 +173,7 @@ export default function ServiciosScreen() {
           </Text>
         ) : (
           filteredServices.map((service) => {
-            const isSelected = selectedServices.includes(service.id);
+            const isSelected = selectedServiceId === service.id;
 
             return (
               <TouchableOpacity
@@ -192,12 +207,14 @@ export default function ServiciosScreen() {
       </ScrollView>
 
       {/* Botón flotante de reservar */}
-      {selectedServices.length > 0 && (
+      {selectedServiceId && (
         <View style={styles.floatingButtonContainer}>
-          <TouchableOpacity style={styles.floatingButton} activeOpacity={0.9}>
-            <Text style={styles.floatingButtonText}>
-              Reservar cita ({selectedServices.length})
-            </Text>
+          <TouchableOpacity
+            style={styles.floatingButton}
+            activeOpacity={0.9}
+            onPress={handleReserve}
+          >
+            <Text style={styles.floatingButtonText}>Reservar cita</Text>
           </TouchableOpacity>
         </View>
       )}

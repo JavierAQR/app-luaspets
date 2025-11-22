@@ -1,86 +1,109 @@
+import { API } from "@/constants/api";
+import { useAuth } from "@/hooks/useAuth";
 import { MaterialIcons } from "@expo/vector-icons";
-import React, { useState } from "react";
+import { useFocusEffect, useRouter } from "expo-router";
+import React, { useCallback, useState } from "react";
 import {
-    FlatList,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
 
-// Datos temporales de citas
-const CITAS_DATA: Cita[] = [
-  {
-    id: 1,
-    mascota: "Max",
-    servicio: "Consulta general",
-    fecha: "2024-11-15",
-    hora: "10:00",
-    estado: "programada",
-    veterinario: "Dr. García",
-    motivo: "Revisión de rutina",
-  },
-  {
-    id: 2,
-    mascota: "Luna",
-    servicio: "Vacunación",
-    fecha: "2024-11-18",
-    hora: "15:30",
-    estado: "programada",
-    veterinario: "Dra. Martínez",
-    motivo: "Vacuna antirrábica",
-  },
-  {
-    id: 3,
-    mascota: "Rocky",
-    servicio: "Baño y corte",
-    fecha: "2024-11-12",
-    hora: "11:00",
-    estado: "completada",
-    veterinario: "Personal de grooming",
-    motivo: "Grooming completo",
-  },
-  {
-    id: 4,
-    mascota: "Michi",
-    servicio: "Consulta especializada",
-    fecha: "2024-11-10",
-    hora: "09:00",
-    estado: "completada",
-    veterinario: "Dr. López",
-    motivo: "Problemas digestivos",
-  },
-  {
-    id: 5,
-    mascota: "Max",
-    servicio: "Control veterinario",
-    fecha: "2024-11-08",
-    hora: "14:00",
-    estado: "cancelada",
-    veterinario: "Dr. García",
-    motivo: "Chequeo general",
-  },
-];
+type BackendStatus = "PENDING" | "CONFIRMED" | "CANCELLED" | "COMPLETED";
+
+type AppointmentFromApi = {
+  id: string;
+  date: string; // ISO
+  status: BackendStatus;
+  reason?: string | null;
+  pet: { name: string };
+  service: { name: string };
+};
+
+type EstadoUI = "programada" | "completada" | "cancelada";
 
 type Cita = {
-  id: number;
+  id: string;
   mascota: string;
   servicio: string;
-  fecha: string;
-  hora: string;
-  estado: "programada" | "completada" | "cancelada";
-  veterinario: string;
+  fechaISO: string;
+  estado: EstadoUI;
   motivo: string;
 };
 
 type FilterType = "todas" | "programada" | "completada" | "cancelada";
 
 export default function CitasScreen() {
-//   const router = useRouter();
+  const router = useRouter();
   const [activeFilter, setActiveFilter] = useState<FilterType>("todas");
+  const [citas, setCitas] = useState<Cita[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
 
-  const getEstadoConfig = (estado: string) => {
+  const mapStatusToEstadoUI = (status: BackendStatus): EstadoUI => {
+    switch (status) {
+      case "PENDING":
+      case "CONFIRMED":
+        return "programada";
+      case "COMPLETED":
+        return "completada";
+      case "CANCELLED":
+      default:
+        return "cancelada";
+    }
+  };
+
+  const fetchAppointments = useCallback(async () => {
+    try {
+      setLoading(true);
+      const token = await useAuth.getToken();
+      if (!token) {
+        await useAuth.clearSession();
+        router.replace("/(auth)" as never);
+        return;
+      }
+
+      const res = await API.get<AppointmentFromApi[]>("/appointments/me", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      const mapped: Cita[] = res.data.map((a) => ({
+        id: a.id,
+        mascota: a.pet?.name || "Mascota",
+        servicio: a.service?.name || "Servicio",
+        fechaISO: a.date,
+        estado: mapStatusToEstadoUI(a.status),
+        motivo: a.reason || "Sin motivo especificado",
+      }));
+
+      setCitas(mapped);
+    } catch (err: any) {
+      console.log(
+        "getMyAppointments error:",
+        err?.response?.data || err.message
+      );
+      Alert.alert(
+        "Error",
+        err?.response?.data?.message || "No se pudieron cargar tus citas."
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, [router]);
+
+  // Recargar cada vez que la pantalla gana foco
+  useFocusEffect(
+    useCallback(() => {
+      fetchAppointments();
+    }, [fetchAppointments])
+  );
+
+  const getEstadoConfig = (estado: EstadoUI) => {
     switch (estado) {
       case "programada":
         return {
@@ -113,7 +136,10 @@ export default function CitasScreen() {
     }
   };
 
-  const formatearFecha = (fecha: string) => {
+  const formatearFecha = (iso: string) => {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return "---";
+
     const meses = [
       "Ene",
       "Feb",
@@ -128,26 +154,89 @@ export default function CitasScreen() {
       "Nov",
       "Dic",
     ];
-    const [, month, day] = fecha.split("-");
-    return `${day} ${meses[parseInt(month) - 1]}`;
+    const day = d.getDate().toString().padStart(2, "0");
+    const month = meses[d.getMonth()];
+    return `${day} ${month}`;
+  };
+
+  const formatearHora = (iso: string) => {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return "--:--";
+    return d.toLocaleTimeString("es-PE", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    });
   };
 
   const filteredCitas =
     activeFilter === "todas"
-      ? CITAS_DATA
-      : CITAS_DATA.filter((cita) => cita.estado === activeFilter);
+      ? citas
+      : citas.filter((cita) => cita.estado === activeFilter);
+
+  const handleCancelar = (cita: Cita) => {
+    Alert.alert(
+      "Cancelar cita",
+      `¿Seguro que deseas cancelar la cita de ${cita.mascota} para "${cita.servicio}"?`,
+      [
+        { text: "No", style: "cancel" },
+        {
+          text: "Sí, cancelar",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              setActionLoadingId(cita.id);
+              const token = await useAuth.getToken();
+              if (!token) {
+                await useAuth.clearSession();
+                router.replace("/(auth)" as never);
+                return;
+              }
+
+              await API.delete(`/appointments/${cita.id}`, {
+                headers: { Authorization: `Bearer ${token}` },
+              });
+
+              // Re-cargar lista
+              await fetchAppointments();
+              Alert.alert(
+                "Cita cancelada",
+                "La cita fue cancelada correctamente."
+              );
+            } catch (err: any) {
+              console.log(
+                "cancelAppointment error:",
+                err?.response?.data || err.message
+              );
+              Alert.alert(
+                "Error",
+                err?.response?.data?.message ||
+                  "No se pudo cancelar la cita. Intenta nuevamente."
+              );
+            } finally {
+              setActionLoadingId(null);
+            }
+          },
+        },
+      ]
+    );
+  };
 
   const renderCitaCard = ({ item }: { item: Cita }) => {
     const estadoConfig = getEstadoConfig(item.estado);
     const isProgramada = item.estado === "programada";
+    const isCancelling = actionLoadingId === item.id;
 
     return (
       <TouchableOpacity
         style={styles.card}
         activeOpacity={0.7}
-        onPress={() => {
-          console.log("Ver detalles de cita:", item.id);
-        }}
+        onPress={() =>
+          router.push({
+            pathname: "/(tabs)/citas/detalle",
+            params: { id: item.id },
+          } as any)
+        }
       >
         {/* Barra lateral de color según estado */}
         <View
@@ -187,35 +276,54 @@ export default function CitasScreen() {
             <View style={styles.dateTimeItem}>
               <MaterialIcons name="calendar-today" size={18} color="#666" />
               <Text style={styles.dateTimeText}>
-                {formatearFecha(item.fecha)}
+                {formatearFecha(item.fechaISO)}
               </Text>
             </View>
             <View style={styles.dateTimeItem}>
               <MaterialIcons name="access-time" size={18} color="#666" />
-              <Text style={styles.dateTimeText}>{item.hora}</Text>
+              <Text style={styles.dateTimeText}>
+                {formatearHora(item.fechaISO)}
+              </Text>
             </View>
           </View>
 
-          {/* Veterinario */}
+          {/* Veterinario (placeholder, backend no lo tiene) */}
           <View style={styles.vetInfo}>
             <MaterialIcons name="person" size={18} color="#999" />
-            <Text style={styles.vetName}>{item.veterinario}</Text>
+            <Text style={styles.vetName}>Veterinaria Lua&apos;s Pets</Text>
           </View>
 
           {/* Acciones para citas programadas */}
           {isProgramada && (
             <View style={styles.actionsContainer}>
-              <TouchableOpacity style={styles.actionButton}>
+              <TouchableOpacity
+                style={styles.actionButton}
+                onPress={() =>
+                  router.push({
+                    pathname: "/(tabs)/citas/editar",
+                    params: { id: item.id },
+                  } as any)
+                }
+              >
                 <MaterialIcons name="edit" size={18} color="#c568f2" />
                 <Text style={styles.actionText}>Modificar</Text>
               </TouchableOpacity>
+
               <TouchableOpacity
                 style={[styles.actionButton, styles.cancelButton]}
+                onPress={() => handleCancelar(item)}
+                disabled={isCancelling}
               >
-                <MaterialIcons name="close" size={18} color="#e74c3c" />
-                <Text style={[styles.actionText, styles.cancelText]}>
-                  Cancelar
-                </Text>
+                {isCancelling ? (
+                  <ActivityIndicator size="small" color="#e74c3c" />
+                ) : (
+                  <>
+                    <MaterialIcons name="close" size={18} color="#e74c3c" />
+                    <Text style={[styles.actionText, styles.cancelText]}>
+                      Cancelar
+                    </Text>
+                  </>
+                )}
               </TouchableOpacity>
             </View>
           )}
@@ -230,6 +338,14 @@ export default function CitasScreen() {
     { key: "completada", label: "Completadas", icon: "check-circle" },
     { key: "cancelada", label: "Canceladas", icon: "cancel" },
   ];
+
+  if (loading) {
+    return (
+      <View style={[styles.container, { justifyContent: "center" }]}>
+        <ActivityIndicator size="large" color="#c568f2" />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -281,7 +397,7 @@ export default function CitasScreen() {
         <FlatList
           data={filteredCitas}
           renderItem={renderCitaCard}
-          keyExtractor={(item) => item.id.toString()}
+          keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContainer}
           showsVerticalScrollIndicator={false}
         />
@@ -300,19 +416,18 @@ export default function CitasScreen() {
       )}
 
       {/* Botón flotante para agendar */}
-      <TouchableOpacity
+      {/* <TouchableOpacity
         style={styles.fabButton}
         activeOpacity={0.8}
-        onPress={() => {
-          console.log("Agendar nueva cita");
-        }}
+        onPress={() => router.push("/(tabs)/citas/nueva" as never)}
       >
         <MaterialIcons name="add" size={28} color="#fff" />
-      </TouchableOpacity>
+      </TouchableOpacity> */}
     </View>
   );
 }
 
+// 👇 Mantén exactamente los mismos styles que ya tenías
 const styles = StyleSheet.create({
   container: {
     flex: 1,
