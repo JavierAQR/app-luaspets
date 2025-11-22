@@ -31,11 +31,21 @@ export default function AuthScreen() {
   const handleLogin = async () => {
     setLoading(true);
     setError("");
+  
     try {
       const res = await API.post("/auth/login", { email, password });
-      const { token } = res.data;
-      await useAuth.saveToken(token);
-      router.replace("/(tabs)");
+  
+      const { token, user } = res.data; // viene tal como mostraste
+  
+      // Guardamos token + user
+      await useAuth.saveSession(token, user);
+  
+      // Redirección según el rol
+      if (user.role === "ADMIN") {
+        router.replace("/(admin)" as never);
+      } else {
+        router.replace("/(tabs)");
+      }
     } catch (err: any) {
       setError(err.response?.data?.message || "Error al iniciar sesión");
     } finally {

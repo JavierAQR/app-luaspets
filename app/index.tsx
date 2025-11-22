@@ -11,9 +11,14 @@ export default function Index() {
     const checkAuth = async () => {
       try {
         const token = await useAuth.getToken();
-        
-        if (token) {
-          router.replace("/(tabs)");
+        const user = await useAuth.getUser();
+
+        if (token && user) {
+          if (user.role === "ADMIN") {
+            router.replace("/(admin)");
+          } else {
+            router.replace("/(tabs)");
+          }
         } else {
           router.replace("/welcome");
         }

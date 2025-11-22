@@ -5,13 +5,13 @@ import { MaterialIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
-    ActivityIndicator,
-    Image,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Image,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
 
 export default function ProfileScreen() {
@@ -31,7 +31,7 @@ export default function ProfileScreen() {
 
       if (err.response?.status === 401) {
         console.log("Token inválido, borrando token...");
-        await useAuth.clearToken();
+        await useAuth.clearSession()
         router.replace("/(auth)");
       }
     } finally {
@@ -44,7 +44,7 @@ export default function ProfileScreen() {
   }, []);
 
   const handleLogout = async () => {
-    await useAuth.clearToken();
+    await useAuth.clearSession()
     router.replace("/(auth)");
   };
 
