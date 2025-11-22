@@ -1,6 +1,8 @@
 import { MaterialIcons } from '@expo/vector-icons';
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
+  ActivityIndicator,
+  Alert,
   Image,
   ScrollView,
   Text,
@@ -9,103 +11,95 @@ import {
   View,
 } from 'react-native';
 import styles from '../styles/styles';
+import { API } from '@/constants/api';
 
 // Datos temporales de servicios
-const SERVICIOS_DATA = {
-  grooming: [
-    {
-      id: 1,
-      nombre: 'Baño básico',
-      precio: 25,
-      imagen: 'https://img.freepik.com/foto-gratis/lavar-perro-mascota-casa_23-2149627259.jpg?semt=ais_hybrid&w=740&q=80',
-    },
-    {
-      id: 2,
-      nombre: 'Corte de pelo',
-      precio: 20,
-      imagen: 'https://cdn.shopify.com/s/files/1/0552/3750/9303/files/corte_de_pelo_perros_1024x1024.png?v=1736509890',
-    },
-    {
-      id: 3,
-      nombre: 'Baño completo',
-      precio: 35,
-      imagen: 'https://arqa.com/empresas/wp-content/uploads/sites/2/2023/11/har03083-1-860x573.jpg',
-    },
-    {
-      id: 4,
-      nombre: 'Corte de uñas',
-      precio: 15,
-      imagen: 'https://jelpin.cl/media/wysiwyg/Blog/corte_de_u_as_mascotas.jpg',
-    },
-  ],
-  consultas: [
-    {
-      id: 5,
-      nombre: 'Consulta general',
-      precio: 40,
-      imagen: 'https://selecciones.com.mx/wp-content/uploads/2019/08/consultas-en-el-veterinario.jpg',
-    },
-    {
-      id: 6,
-      nombre: 'Control veterinario',
-      precio: 35,
-      imagen: 'https://purina.co.cr/sites/default/files/2023-11/consulta-veterinaria-cachorro-cr.jpg',
-    },
-    {
-      id: 7,
-      nombre: 'Consulta especializada',
-      precio: 60,
-      imagen: 'https://www.veterinariadogtor.com/pictures/pages/13/Consulta-Especializada.jpg',
-    },
-  ],
-  vacunas: [
-    {
-      id: 8,
-      nombre: 'Vacuna antirrábica',
-      precio: 30,
-      imagen: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQnNWPENxRRO5WdundkPOo7sZXYFfm9whUrfA&s',
-    },
-    {
-      id: 9,
-      nombre: 'Vacuna séxtuple',
-      precio: 45,
-      imagen: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRhnkriKZLs5ln4OHeqDtJ_wK3USJqvBakAnQ&s',
-    },
-    {
-      id: 10,
-      nombre: 'Vacuna triple felina',
-      precio: 40,
-      imagen: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTkhG-CMwFOBRWKgUx2mpcd-XtnJE12Nho70Q&s',
-    },
-  ],
+type CategoryType = "grooming" | "consultas" | "vacunas";
+type ServiceType = "GROOMING" | "CONSULTATION" | "VACCINE";
+
+type Service = {
+  id: string;
+  name: string;
+  description?: string | null;
+  type: ServiceType;
+  durationMin?: number | null;
+  price: number;
+  imageUrl: string;
 };
 
-type CategoryType = 'grooming' | 'consultas' | 'vacunas';
+const CATEGORY_LABELS: { key: CategoryType; label: string }[] = [
+  { key: "grooming", label: "Grooming" },
+  { key: "consultas", label: "Consultas" },
+  { key: "vacunas", label: "Vacunas" },
+];
+
+const SERVICE_TYPE_TO_CATEGORY: Record<ServiceType, CategoryType> = {
+  GROOMING: "grooming",
+  CONSULTATION: "consultas",
+  VACCINE: "vacunas",
+};
 
 export default function ServiciosScreen() {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [activeCategory, setActiveCategory] = useState<CategoryType>('grooming');
-  const [selectedServices, setSelectedServices] = useState<number[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [activeCategory, setActiveCategory] =
+    useState<CategoryType>("grooming");
+  const [selectedServices, setSelectedServices] = useState<string[]>([]);
 
-  const categories = [
-    { key: 'grooming' as CategoryType, label: 'Grooming' },
-    { key: 'consultas' as CategoryType, label: 'Consultas' },
-    { key: 'vacunas' as CategoryType, label: 'Vacunas' },
-  ];
+  const [services, setServices] = useState<Service[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const currentServices = SERVICIOS_DATA[activeCategory];
-
-  const toggleServiceSelection = (serviceId: number) => {
-    if (selectedServices.includes(serviceId)) {
-      setSelectedServices(selectedServices.filter((id) => id !== serviceId));
-    } else {
-      setSelectedServices([...selectedServices, serviceId]);
+  const fetchServices = async () => {
+    try {
+      setLoading(true);
+      const res = await API.get<Service[]>("/services");
+      setServices(res.data);
+    } catch (err: any) {
+      console.log("fetchServices error:", err?.response?.data || err.message);
+      Alert.alert(
+        "Error",
+        "No se pudieron cargar los servicios. Intenta nuevamente."
+      );
+    } finally {
+      setLoading(false);
     }
   };
 
-  const filteredServices = currentServices.filter((service) =>
-    service.nombre.toLowerCase().includes(searchQuery.toLowerCase())
+  useEffect(() => {
+    fetchServices();
+  }, []);
+
+  const toggleServiceSelection = (serviceId: string) => {
+    setSelectedServices((prev) =>
+      prev.includes(serviceId)
+        ? prev.filter((id) => id !== serviceId)
+        : [...prev, serviceId]
+    );
+  };
+
+  // Filtrar primero por categoría, luego por búsqueda
+  const filteredServicesByCategory = useMemo(
+    () =>
+      services.filter(
+        (svc) => SERVICE_TYPE_TO_CATEGORY[svc.type] === activeCategory
+      ),
+    [services, activeCategory]
   );
+
+  const filteredServices = useMemo(
+    () =>
+      filteredServicesByCategory.filter((service) =>
+        service.name.toLowerCase().includes(searchQuery.toLowerCase())
+      ),
+    [filteredServicesByCategory, searchQuery]
+  );
+
+  if (loading) {
+    return (
+      <View style={[styles.container, { justifyContent: "center" }]}>
+        <ActivityIndicator size="large" color="#c568f2" />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -114,7 +108,12 @@ export default function ServiciosScreen() {
 
       {/* Buscador */}
       <View style={styles.searchContainer}>
-        <MaterialIcons name="search" size={24} color="#999" style={styles.searchIcon} />
+        <MaterialIcons
+          name="search"
+          size={24}
+          color="#999"
+          style={styles.searchIcon}
+        />
         <TextInput
           placeholder="Buscar..."
           placeholderTextColor="#999"
@@ -126,7 +125,7 @@ export default function ServiciosScreen() {
 
       {/* Categorías */}
       <View style={styles.categoriesContainer}>
-        {categories.map((category) => (
+        {CATEGORY_LABELS.map((category) => (
           <TouchableOpacity
             key={category.key}
             style={[
@@ -153,28 +152,43 @@ export default function ServiciosScreen() {
         contentContainerStyle={styles.servicesContainer}
         showsVerticalScrollIndicator={false}
       >
-        {filteredServices.map((service) => {
-          const isSelected = selectedServices.includes(service.id);
-          return (
-            <TouchableOpacity
-              key={service.id}
-              style={[styles.serviceCard, isSelected && styles.serviceCardSelected]}
-              onPress={() => toggleServiceSelection(service.id)}
-              activeOpacity={0.8}
-            >
-              <View style={styles.imageContainer}>
-                <Image source={{ uri: service.imagen }} style={styles.serviceImage} />
-                {isSelected && (
-                  <View style={styles.checkBadge}>
-                    <MaterialIcons name="check" size={20} color="#fff" />
-                  </View>
-                )}
-              </View>
-              <Text style={styles.serviceName}>{service.nombre}</Text>
-              <Text style={styles.servicePrice}>s/{service.precio}</Text>
-            </TouchableOpacity>
-          );
-        })}
+        {filteredServices.length === 0 ? (
+          <Text style={{ textAlign: "center", marginTop: 20, color: "#666" }}>
+            No hay servicios disponibles en esta categoría.
+          </Text>
+        ) : (
+          filteredServices.map((service) => {
+            const isSelected = selectedServices.includes(service.id);
+
+            return (
+              <TouchableOpacity
+                key={service.id}
+                style={[
+                  styles.serviceCard,
+                  isSelected && styles.serviceCardSelected,
+                ]}
+                onPress={() => toggleServiceSelection(service.id)}
+                activeOpacity={0.8}
+              >
+                <View style={styles.imageContainer}>
+                  <Image
+                    source={{ uri: service.imageUrl }}
+                    style={styles.serviceImage}
+                  />
+                  {isSelected && (
+                    <View style={styles.checkBadge}>
+                      <MaterialIcons name="check" size={20} color="#fff" />
+                    </View>
+                  )}
+                </View>
+                <Text style={styles.serviceName}>{service.name}</Text>
+                <Text style={styles.servicePrice}>
+                  s/{Number(service.price).toFixed(2)}
+                </Text>
+              </TouchableOpacity>
+            );
+          })
+        )}
       </ScrollView>
 
       {/* Botón flotante de reservar */}
@@ -190,4 +204,3 @@ export default function ServiciosScreen() {
     </View>
   );
 }
-
