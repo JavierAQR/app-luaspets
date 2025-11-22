@@ -3,6 +3,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
+  Alert,
   Image,
   ImageBackground,
   ScrollView,
@@ -53,7 +54,15 @@ export default function AuthScreen() {
         email,
         password,
       });
+
+      Alert.alert("Éxito", "Registro exitoso. Ahora puedes iniciar sesión.");
+
       setActiveTab("login");
+      setName("");
+      setLastname("");
+      setPhoneNumber("");
+      setEmail("");
+      setPassword("");
     } catch (err: any) {
       setError(err.response?.data?.message || "Error al registrar usuario");
     } finally {
