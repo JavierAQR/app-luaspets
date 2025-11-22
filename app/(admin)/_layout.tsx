@@ -114,6 +114,16 @@ export default function AdminLayout() {
           ),
         }}
       />
+
+      <Tabs.Screen
+        name="perfil"
+        options={{
+          title: "Mi cuenta",
+          tabBarIcon: ({ color, size }) => (
+            <MaterialIcons name="person" size={size} color={color} />
+          ),
+        }}
+      />
     </Tabs>
   );
 }
