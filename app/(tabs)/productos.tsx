@@ -1,5 +1,7 @@
 import { API } from "@/constants/api";
+import { useAuth } from "@/hooks/useAuth";
 import { MaterialIcons } from "@expo/vector-icons";
+import { router } from "expo-router";
 import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
@@ -66,6 +68,53 @@ export default function ProductosScreen() {
   useEffect(() => {
     fetchProducts();
   }, []);
+
+  const handleAddSelectedToCart = async () => {
+    try {
+      const token = await useAuth.getToken();
+      if (!token) {
+        await useAuth.clearSession();
+        router.replace("/(auth)" as never);
+        return;
+      }
+
+      // agregar cada producto seleccionado
+      for (const productId of selectedProducts) {
+        await API.post(
+          "/carts/items",
+          { productId, quantity: 1 },
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        );
+      }
+
+      Alert.alert(
+        "Agregado",
+        "Los productos fueron añadidos al carrito correctamente.",
+        [
+          {
+            text: "Ir al carrito",
+            onPress: () => router.push("/cart" as any),
+          },
+          {
+            text: "Seguir comprando",
+            style: "cancel",
+          },
+        ]
+      );
+
+      // Limpia selección después de agregar
+      setSelectedProducts([]);
+    } catch (err: any) {
+      console.log("Error add to cart:", err?.response?.data || err.message);
+      Alert.alert(
+        "Error",
+        err?.response?.data?.message ||
+          "No se pudo agregar al carrito. Intenta nuevamente."
+      );
+    }
+  };
 
   const toggleProductSelection = (productId: string) => {
     const product = products.find((p) => p.id === productId);
@@ -238,9 +287,7 @@ export default function ProductosScreen() {
                     style={[
                       styles.stockText,
                       isOutOfStock && styles.textDisabled,
-                      !isOutOfStock &&
-                        product.stock < 10 &&
-                        styles.stockLow,
+                      !isOutOfStock && product.stock < 10 && styles.stockLow,
                     ]}
                   >
                     {isOutOfStock ? "Sin stock" : `Stock: ${product.stock}`}
@@ -255,7 +302,11 @@ export default function ProductosScreen() {
       {/* Botón flotante de agregar al carrito */}
       {selectedProducts.length > 0 && (
         <View style={styles.floatingButtonContainer}>
-          <TouchableOpacity style={styles.floatingButton} activeOpacity={0.9}>
+          <TouchableOpacity
+            style={styles.floatingButton}
+            activeOpacity={0.9}
+            onPress={handleAddSelectedToCart}
+          >
             <Text style={styles.floatingButtonText}>
               Agregar al carrito ({selectedProducts.length})
             </Text>

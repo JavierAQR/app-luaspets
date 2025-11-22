@@ -1,201 +1,371 @@
+import { API } from '@/constants/api';
+import { useAuth } from '@/hooks/useAuth';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
+import React, { useCallback, useState } from 'react';
 import {
-    Alert,
-    Image,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  Image,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-const CARRITO_INICIAL = [
-  {
-    id: 1,
-    nombre: 'Dog Chow Adulto 5kg',
-    precio: 45,
-    cantidad: 2,
-    stock: 25,
-    imagen: 'https://www.superpet.pe/on/demandware.static/-/Sites-SuperPet-master-catalog/default/dw394e2959/images/AP000052.jpg',
-    categoria: 'Alimentos',
-  },
-  {
-    id: 2,
-    nombre: 'Pelota de goma',
-    precio: 15,
-    cantidad: 1,
-    stock: 45,
-    imagen: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSTEQd1RsaAvpSOXul8JK6_PdOcmT8p1YEj7w&s',
-    categoria: 'Juguetes',
-  },
-  {
-    id: 3,
-    nombre: 'Collar antipulgas',
-    precio: 30,
-    cantidad: 1,
-    stock: 20,
-    imagen: 'https://rimage.ripley.com.pe/home.ripley/Attachment/MKP/5500/PMP20000750300/full_image-1.jpeg',
-    categoria: 'Accesorios',
-  },
-  {
-    id: 4,
-    nombre: 'Cama acolchada',
-    precio: 65,
-    cantidad: 1,
-    stock: 8,
-    imagen: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRg8sPq4DgZCyBOxC3za3mjnfmWoUwQSO3H1Q&s',
-    categoria: 'Accesorios',
-  },
-];
+type CartProductCategory = "FOOD" | "TOY" | "ACCESSORY";
 
+type CartProduct = {
+  id: string;
+  name: string;
+  price: number;
+  stock: number | null;
+  imageUrl?: string | null;
+  category: CartProductCategory;
+};
+
+type CartItemFromApi = {
+  id: string;          // id del CartItem (para PUT/DELETE)
+  quantity: number;
+  unitPrice: number;
+  product: CartProduct;
+};
+
+type CartFromApi = {
+  id: string;
+  items: CartItemFromApi[];
+};
+
+// Estructura que usa la UI
 type CarritoItem = {
-  id: number;
+  id: string;          // id del CartItem
   nombre: string;
   precio: number;
   cantidad: number;
-  stock: number;
+  stock: number;       // 0 si viene null
   imagen: string;
-  categoria: string;
+  categoria: string;   // texto para mostrar
+};
+
+const mapCategoryLabel = (cat: CartProductCategory): string => {
+  switch (cat) {
+    case "FOOD":
+      return "Alimentos";
+    case "TOY":
+      return "Juguetes";
+    case "ACCESSORY":
+      return "Accesorios";
+    default:
+      return "";
+  }
+};
+
+const mapCartToItems = (cart: CartFromApi): CarritoItem[] => {
+  return cart.items.map((item) => ({
+    id: item.id,
+    nombre: item.product.name,
+    precio: Number(item.unitPrice ?? item.product.price),
+    cantidad: item.quantity,
+    stock: item.product.stock ?? 0,
+    imagen:
+      item.product.imageUrl ||
+      "https://via.placeholder.com/200x200?text=Producto",
+    categoria: mapCategoryLabel(item.product.category),
+  }));
 };
 
 export default function CarritoScreen() {
   const router = useRouter();
-  const [carritoItems, setCarritoItems] = useState<CarritoItem[]>(CARRITO_INICIAL);
+  const insets = useSafeAreaInsets();
 
-  const actualizarCantidad = (id: number, nuevaCantidad: number) => {
+  const [carritoItems, setCarritoItems] = useState<CarritoItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState(false);
+
+  const cargarCarrito = useCallback(async () => {
+    try {
+      setLoading(true);
+      const token = await useAuth.getToken();
+
+      if (!token) {
+        await useAuth.clearSession();
+        router.replace("/(auth)" as never);
+        return;
+      }
+
+      const res = await API.get<CartFromApi>("/carts", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      setCarritoItems(mapCartToItems(res.data));
+    } catch (err: any) {
+      console.log("getMyCart error:", err?.response?.data || err.message);
+      Alert.alert(
+        "Error",
+        err?.response?.data?.message || "No se pudo cargar el carrito."
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, [router]);
+
+  // Recargar cada vez que la pantalla toma foco
+  useFocusEffect(
+    useCallback(() => {
+      cargarCarrito();
+    }, [cargarCarrito])
+  );
+
+  const actualizarCantidad = async (itemId: string, nuevaCantidad: number) => {
     if (nuevaCantidad < 1) return;
-    
-    setCarritoItems(items =>
-      items.map(item => {
-        if (item.id === id) {
-          if (nuevaCantidad > item.stock) {
-            Alert.alert('Stock insuficiente', `Solo hay ${item.stock} unidades disponibles`);
-            return item;
-          }
-          return { ...item, cantidad: nuevaCantidad };
+
+    const item = carritoItems.find((i) => i.id === itemId);
+    if (!item) return;
+
+    // Validación local de stock
+    if (nuevaCantidad > item.stock) {
+      Alert.alert(
+        "Stock insuficiente",
+        `Solo hay ${item.stock} unidades disponibles`
+      );
+      return;
+    }
+
+    try {
+      setActionLoading(true);
+      const token = await useAuth.getToken();
+
+      const res = await API.put<CartFromApi>(
+        `/carts/items/${itemId}`,
+        { quantity: nuevaCantidad },
+        {
+          headers: { Authorization: `Bearer ${token}` },
         }
-        return item;
-      })
-    );
+      );
+
+      setCarritoItems(mapCartToItems(res.data));
+    } catch (err: any) {
+      console.log(
+        "updateCartItem error:",
+        err?.response?.data || err.message
+      );
+      Alert.alert(
+        "Error",
+        err?.response?.data?.message ||
+          "No se pudo actualizar la cantidad del producto."
+      );
+    } finally {
+      setActionLoading(false);
+    }
   };
 
-  const eliminarItem = (id: number) => {
+  const eliminarItem = (itemId: string) => {
     Alert.alert(
-      'Eliminar producto',
-      '¿Estás seguro de eliminar este producto del carrito?',
+      "Eliminar producto",
+      "¿Estás seguro de eliminar este producto del carrito?",
       [
-        { text: 'Cancelar', style: 'cancel' },
+        { text: "Cancelar", style: "cancel" },
         {
-          text: 'Eliminar',
-          style: 'destructive',
-          onPress: () => setCarritoItems(items => items.filter(item => item.id !== id)),
+          text: "Eliminar",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              setActionLoading(true);
+              const token = await useAuth.getToken();
+
+              const res = await API.delete<CartFromApi>(
+                `/carts/items/${itemId}`,
+                {
+                  headers: { Authorization: `Bearer ${token}` },
+                }
+              );
+
+              setCarritoItems(mapCartToItems(res.data));
+            } catch (err: any) {
+              console.log(
+                "removeCartItem error:",
+                err?.response?.data || err.message
+              );
+              Alert.alert(
+                "Error",
+                err?.response?.data?.message ||
+                  "No se pudo eliminar el producto del carrito."
+              );
+            } finally {
+              setActionLoading(false);
+            }
+          },
         },
       ]
     );
-  };
-
-  const calcularSubtotal = () => {
-    return carritoItems.reduce((sum, item) => sum + item.precio * item.cantidad, 0);
-  };
-
-  const calcularEnvio = () => {
-    const subtotal = calcularSubtotal();
-    return subtotal > 100 ? 0 : 10; // Envío gratis si es mayor a 100
-  };
-
-  const calcularTotal = () => {
-    return calcularSubtotal() + calcularEnvio();
-  };
-
-  const handleCheckout = () => {
-    if (carritoItems.length === 0) {
-      Alert.alert('Carrito vacío', 'Agrega productos al carrito para continuar');
-      return;
-    }
-    Alert.alert('Procesando compra', 'Redirigiendo a checkout...');
-    // Aquí iría la navegación al checkout
   };
 
   const vaciarCarrito = () => {
+    if (carritoItems.length === 0) return;
+
     Alert.alert(
-      'Vaciar carrito',
-      '¿Estás seguro de eliminar todos los productos?',
+      "Vaciar carrito",
+      "¿Estás seguro de eliminar todos los productos?",
       [
-        { text: 'Cancelar', style: 'cancel' },
+        { text: "Cancelar", style: "cancel" },
         {
-          text: 'Vaciar',
-          style: 'destructive',
-          onPress: () => setCarritoItems([]),
+          text: "Vaciar",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              setActionLoading(true);
+              const token = await useAuth.getToken();
+
+              const res = await API.delete<CartFromApi>("/carts", {
+                headers: { Authorization: `Bearer ${token}` },
+              });
+
+              setCarritoItems(mapCartToItems(res.data));
+            } catch (err: any) {
+              console.log("clearCart error:", err?.response?.data || err.message);
+              Alert.alert(
+                "Error",
+                err?.response?.data?.message ||
+                  "No se pudo vaciar el carrito."
+              );
+            } finally {
+              setActionLoading(false);
+            }
+          },
         },
       ]
     );
+  };
+
+  const calcularSubtotal = () =>
+    carritoItems.reduce(
+      (sum, item) => sum + item.precio * item.cantidad,
+      0
+    );
+
+  const calcularEnvio = () => {
+    const subtotal = calcularSubtotal();
+    return subtotal > 100 ? 0 : 10;
   };
 
   const subtotal = calcularSubtotal();
   const envio = calcularEnvio();
-  const total = calcularTotal();
+  const total = subtotal + envio;
   const envioGratis = envio === 0;
 
-  const insets = useSafeAreaInsets();
+  const handleCheckout = () => {
+    if (carritoItems.length === 0) {
+      Alert.alert(
+        "Carrito vacío",
+        "Agrega productos al carrito para continuar"
+      );
+      return;
+    }
+    Alert.alert("Procesando compra", "Redirigiendo a checkout...");
+    // TODO: navegación a checkout cuando lo tengas
+  };
+
+  if (loading) {
+    return (
+      <View
+        style={[
+          styles.container,
+          { paddingTop: insets.top, justifyContent: "center" },
+        ]}
+      >
+        <ActivityIndicator size="large" color="#c568f2" />
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+        <TouchableOpacity
+          onPress={() => router.back()}
+          style={styles.backButton}
+        >
           <MaterialIcons name="arrow-back" size={24} color="#333" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Mi Carrito</Text>
-        {carritoItems.length > 0 && (
+        {carritoItems.length > 0 ? (
           <TouchableOpacity onPress={vaciarCarrito} style={styles.clearButton}>
-            <MaterialIcons name="delete-outline" size={24} color="#e74c3c" />
+            <MaterialIcons
+              name="delete-outline"
+              size={24}
+              color="#e74c3c"
+            />
           </TouchableOpacity>
+        ) : (
+          <View style={{ width: 40 }} />
         )}
-        {carritoItems.length === 0 && <View style={{ width: 24 }} />}
       </View>
 
       {carritoItems.length > 0 ? (
         <>
           {/* Lista de productos */}
-          <ScrollView 
+          <ScrollView
             style={styles.scrollContent}
             contentContainerStyle={styles.productsContainer}
             showsVerticalScrollIndicator={false}
           >
-            {/* Banner de envío gratis */}
+            {/* Banner de envío */}
             {!envioGratis && (
               <View style={styles.shippingBanner}>
-                <MaterialIcons name="local-shipping" size={20} color="#3498db" />
+                <MaterialIcons
+                  name="local-shipping"
+                  size={20}
+                  color="#3498db"
+                />
                 <Text style={styles.shippingBannerText}>
-                  ¡Agrega s/{(100 - subtotal).toFixed(2)} más para envío gratis!
+                  ¡Agrega s/{(100 - subtotal).toFixed(2)} más para envío
+                  gratis!
                 </Text>
               </View>
             )}
 
             {envioGratis && (
-              <View style={[styles.shippingBanner, styles.shippingBannerSuccess]}>
-                <MaterialIcons name="check-circle" size={20} color="#27ae60" />
-                <Text style={[styles.shippingBannerText, { color: '#27ae60' }]}>
+              <View
+                style={[
+                  styles.shippingBanner,
+                  styles.shippingBannerSuccess,
+                ]}
+              >
+                <MaterialIcons
+                  name="check-circle"
+                  size={20}
+                  color="#27ae60"
+                />
+                <Text
+                  style={[
+                    styles.shippingBannerText,
+                    { color: "#27ae60" },
+                  ]}
+                >
                   ¡Envío gratis en este pedido!
                 </Text>
               </View>
             )}
 
-            {/* Items del carrito */}
             {carritoItems.map((item) => (
               <View key={item.id} style={styles.productCard}>
-                <Image source={{ uri: item.imagen }} style={styles.productImage} />
-                
+                <Image
+                  source={{ uri: item.imagen }}
+                  style={styles.productImage}
+                />
+
                 <View style={styles.productInfo}>
                   <View style={styles.productHeader}>
                     <View style={styles.productNameContainer}>
                       <Text style={styles.productName}>{item.nombre}</Text>
-                      <Text style={styles.productCategory}>{item.categoria}</Text>
+                      <Text style={styles.productCategory}>
+                        {item.categoria}
+                      </Text>
                     </View>
-                    <TouchableOpacity 
+                    <TouchableOpacity
                       onPress={() => eliminarItem(item.id)}
                       style={styles.deleteButton}
                     >
@@ -204,34 +374,63 @@ export default function CarritoScreen() {
                   </View>
 
                   <View style={styles.productFooter}>
-                    <Text style={styles.productPrice}>s/ {item.precio.toFixed(2)}</Text>
-                    
+                    <Text style={styles.productPrice}>
+                      s/ {item.precio.toFixed(2)}
+                    </Text>
+
                     <View style={styles.quantityContainer}>
                       <TouchableOpacity
                         style={styles.quantityButton}
-                        onPress={() => actualizarCantidad(item.id, item.cantidad - 1)}
+                        onPress={() =>
+                          actualizarCantidad(
+                            item.id,
+                            item.cantidad - 1
+                          )
+                        }
+                        disabled={actionLoading}
                       >
-                        <MaterialIcons name="remove" size={18} color="#333" />
+                        <MaterialIcons
+                          name="remove"
+                          size={18}
+                          color="#333"
+                        />
                       </TouchableOpacity>
-                      
-                      <Text style={styles.quantityText}>{item.cantidad}</Text>
-                      
+
+                      <Text style={styles.quantityText}>
+                        {item.cantidad}
+                      </Text>
+
                       <TouchableOpacity
                         style={styles.quantityButton}
-                        onPress={() => actualizarCantidad(item.id, item.cantidad + 1)}
+                        onPress={() =>
+                          actualizarCantidad(
+                            item.id,
+                            item.cantidad + 1
+                          )
+                        }
+                        disabled={actionLoading}
                       >
-                        <MaterialIcons name="add" size={18} color="#333" />
+                        <MaterialIcons
+                          name="add"
+                          size={18}
+                          color="#333"
+                        />
                       </TouchableOpacity>
                     </View>
                   </View>
 
                   <Text style={styles.productTotal}>
-                    Total: s/ {(item.precio * item.cantidad).toFixed(2)}
+                    Total: s/{" "}
+                    {(item.precio * item.cantidad).toFixed(2)}
                   </Text>
 
-                  {item.cantidad >= item.stock && (
+                  {item.cantidad >= item.stock && item.stock > 0 && (
                     <View style={styles.stockWarning}>
-                      <MaterialIcons name="warning" size={14} color="#f39c12" />
+                      <MaterialIcons
+                        name="warning"
+                        size={14}
+                        color="#f39c12"
+                      />
                       <Text style={styles.stockWarningText}>
                         Cantidad máxima disponible
                       </Text>
@@ -242,11 +441,13 @@ export default function CarritoScreen() {
             ))}
           </ScrollView>
 
-          {/* Resumen y checkout */}
-          <View style={styles.summaryContainer}>
+          {/* Resumen y checkout (igual que tenías) */}
+          <View className="summaryContainer" style={styles.summaryContainer}>
             <View style={styles.summaryRow}>
               <Text style={styles.summaryLabel}>Subtotal</Text>
-              <Text style={styles.summaryValue}>s/ {subtotal.toFixed(2)}</Text>
+              <Text style={styles.summaryValue}>
+                s/ {subtotal.toFixed(2)}
+              </Text>
             </View>
 
             <View style={styles.summaryRow}>
@@ -258,8 +459,13 @@ export default function CarritoScreen() {
                   </View>
                 )}
               </View>
-              <Text style={[styles.summaryValue, envioGratis && styles.freeShipping]}>
-                {envioGratis ? 's/ 0.00' : `s/ ${envio.toFixed(2)}`}
+              <Text
+                style={[
+                  styles.summaryValue,
+                  envioGratis && styles.freeShipping,
+                ]}
+              >
+                {envioGratis ? "s/ 0.00" : `s/ ${envio.toFixed(2)}`}
               </Text>
             </View>
 
@@ -267,15 +473,22 @@ export default function CarritoScreen() {
 
             <View style={styles.summaryRow}>
               <Text style={styles.totalLabel}>Total</Text>
-              <Text style={styles.totalValue}>s/ {total.toFixed(2)}</Text>
+              <Text style={styles.totalValue}>
+                s/ {total.toFixed(2)}
+              </Text>
             </View>
 
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.checkoutButton}
               onPress={handleCheckout}
               activeOpacity={0.8}
+              disabled={actionLoading}
             >
-              <MaterialIcons name="shopping-cart-checkout" size={22} color="#fff" />
+              <MaterialIcons
+                name="shopping-cart-checkout"
+                size={22}
+                color="#fff"
+              />
               <Text style={styles.checkoutButtonText}>
                 Proceder al pago
               </Text>
@@ -289,9 +502,9 @@ export default function CarritoScreen() {
           <Text style={styles.emptySubtitle}>
             Agrega productos para comenzar tu compra
           </Text>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.shopButton}
-            onPress={() => router.push('/(tabs)/productos')}
+            onPress={() => router.push("/(tabs)/productos" as never)}
           >
             <MaterialIcons name="storefront" size={20} color="#fff" />
             <Text style={styles.shopButtonText}>Ver productos</Text>
@@ -301,6 +514,7 @@ export default function CarritoScreen() {
     </View>
   );
 }
+
 
 const styles = StyleSheet.create({
   container: {
