@@ -1,24 +1,45 @@
 import { useRouter } from "expo-router";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { ActivityIndicator, View } from "react-native";
 import { useAuth } from "../hooks/useAuth";
 
 export default function Index() {
+  const [loading, setLoading] = useState(true);
   const router = useRouter();
 
   useEffect(() => {
     const checkAuth = async () => {
-      const token = await useAuth.getToken();
-      console.log("Token almacenado:", token);
-      if (token) router.replace("/(tabs)");
-      else router.replace("/(auth)/login");
+      try {
+        const token = await useAuth.getToken();
+        const user = await useAuth.getUser();
+
+        if (token && user) {
+          if (user.role === "ADMIN") {
+            router.replace("/(admin)");
+          } else {
+            router.replace("/(tabs)");
+          }
+        } else {
+          router.replace("/welcome");
+        }
+      } catch (err) {
+        console.error("Error verificando token:", err);
+        router.replace("/welcome");
+      } finally {
+        setLoading(false);
+      }
     };
+
     checkAuth();
   }, []);
 
-  return (
-    <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
-      <ActivityIndicator size="large" color="#000" />
-    </View>
-  );
+  if (loading) {
+    return (
+      <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+        <ActivityIndicator size="large" color="#c568f2" />
+      </View>
+    );
+  }
+
+  return null;
 }

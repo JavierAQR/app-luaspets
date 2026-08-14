@@ -1,13 +1,25 @@
 import { Stack } from "expo-router";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 
 export default function RootLayout() {
   return (
-    <Stack screenOptions={{ headerShown: false }}>
-      {/* 👇 Esta será la primera pantalla al abrir la app */}
-      <Stack.Screen name="welcome" />
+    <SafeAreaProvider>
+      <Stack screenOptions={{ headerShown: false }}>
 
-      {/* 👇 Esto mantiene tu grupo de autenticación */}
-      <Stack.Screen name="(auth)" />
-    </Stack>
+        <Stack.Screen name="index" />
+
+        <Stack.Screen name="welcome" />
+
+        <Stack.Screen name="(auth)" />
+
+        <Stack.Screen name="(admin)" />
+
+        <Stack.Screen name="(tabs)" />
+
+        <Stack.Screen name="profile" />
+
+        <Stack.Screen name="cart" />
+      </Stack>
+    </SafeAreaProvider>
   );
 }
